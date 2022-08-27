@@ -1,0 +1,27 @@
+{
+  "name": "tgnotify",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "nodemon index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/i1fxx/tgnotifyer.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/i1fxx/tgnotifyer/issues"
+  },
+  "homepage": "https://github.com/i1fxx/tgnotifyer#readme",
+  "dependencies": {
+    "dotenv": "^16.0.1",
+    "input": "^1.0.1",
+    "nodemailer": "^6.7.8",
+    "nodemon": "^2.0.19",
+    "telegram": "^2.10.10"
+  }
+}
