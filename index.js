@@ -54,7 +54,7 @@ let getDialogs = async(client)=>{
 	    offsetDate: 0,
 	    offsetId: 0,
 	    offsetPeer: 'username',
-	    limit: 1,
+	    limit: 10,
 	    hash: BigInt('-4156887774564'),
 	    excludePinned: true,
 	    folderId: 0
@@ -68,15 +68,16 @@ let getLastOnline = async(client)=>{
 }
 
 let getSettings = async(client)=>{
+
 	let result = await client.invoke(new Api.messages.GetDialogs({
-    offsetDate: 0,
-    offsetId: 0,
-    offsetPeer: 'folder',
-    limit: 10,
-    hash: BigInt('-4156887774564'),
-    excludePinned: false,
-    folderId: 0
-}));
+	    offsetDate: 0,
+	    offsetId: 1,
+	    offsetPeer: 'userName',
+	    limit: 2,
+	    hash: BigInt('-4156887774564'),
+	    excludePinned: false,
+	    folderId: 0
+	}));
 	return result;
 }
 
@@ -92,6 +93,6 @@ let getSettings = async(client)=>{
 	//client.addEventHandler(messageHandler, new NewMessage({}));
 
 	
-	console.log(settings);
+	console.log(settings.dialogs);
 
 })();
