@@ -1,9 +1,19 @@
 require('dotenv').config();
-let { TelegramClient } = require('telegram');
+let { TelegramClient, Api } = require('telegram');
 let { StringSession } = require('telegram/sessions');
 let { NewMessage } = require('telegram/events');
 let input = require('input');
 let stringSession = new StringSession(process.env.TELEGRAM_STRING_SESSION);
+
+let nodeMailMessage = ()=>{
+	return `<html>
+		<head></head>
+		<body>
+			nodemailerNessage
+		</body>
+
+	</html>`;
+}
 
 //telegram user registration logic
 let regUser = async(client)=>{
@@ -17,32 +27,71 @@ let regUser = async(client)=>{
 }
 
 let messageHandler = (message)=>{
-	console.log(message);
+	
 }
 
 
 //telegram user main auth pool
 let authUser = async()=>{
-	const client = new TelegramClient(stringSession, parseInt(process.env.TELEGRAM_API_ID), process.env.TELEGRAM_API_HASH, {
+	const client = new TelegramClient(
+		stringSession,
+		parseInt(process.env.TELEGRAM_API_ID),
+		process.env.TELEGRAM_API_HASH, {
                 connectionRetries: 5,
 	});
+
 	if(process.env.TELEGRAM_STRING_SESSION === '') client = await regUser(client);
+	
 	// get string session
 	// client.session.save()
+
 	await client.connect();
 	return client;
 }
 
+let getDialogs = async(client)=>{
+	let result = await client.invoke(new Api.messages.GetDialogs({
+	    offsetDate: 0,
+	    offsetId: 0,
+	    offsetPeer: 'username',
+	    limit: 1,
+	    hash: BigInt('-4156887774564'),
+	    excludePinned: true,
+	    folderId: 0
+	}));
+	return result;
+}
+
+let getLastOnline = async(client)=>{
+	let result = await client.invoke(new Api.users.GetFullUser({id: 'me'}));
+	return result;
+}
+
+let getSettings = async(client)=>{
+	let result = await client.invoke(new Api.messages.GetDialogs({
+    offsetDate: 0,
+    offsetId: 0,
+    offsetPeer: 'folder',
+    limit: 10,
+    hash: BigInt('-4156887774564'),
+    excludePinned: false,
+    folderId: 0
+}));
+	return result;
+}
+
 //main pool
 (async()=>{
+	
 	let client = await authUser();
+	//let lastOnline = await getLastOnline();
+	let dialogs = await getDialogs(client);
+	let settings = await getSettings(client);
 
+	//one way getting messages
+	//client.addEventHandler(messageHandler, new NewMessage({}));
 
-	let result = await client.getMessages("me",{
-		limit : 10,
-	});
+	
+	console.log(settings);
 
-
-	console.log(result);
-	client.addEventHandler(messageHandler, new NewMessage({}));
 })();
