@@ -1,84 +1,84 @@
 require('dotenv').config();
-let { TelegramClient, Api, types } = require('telegram'),
-	{ StringSession } = require('telegram/sessions'),
+let { TelegramClient, Api } = require('telegram'),
+	{ StoreSession } = require('telegram/sessions'),
 	{ NewMessage } = require('telegram/events'),
 	input = require('input'),
 	nodemailer = require('nodemailer'),
-	stringSession = new StringSession(process.env.TELEGRAM_STRING_SESSION),
-	sequlize = require('./db'),
-	{ User, Target } = require('./models/models'),
-	nodeMailMessage = (date,count)=>{
-		return `<html>
-			<head></head>
-			<body>
-				По состоянию на ${date} у тебя ${count} непрочитанных сообщений!
-			</body>
-	
-		</html>`;
-	};
+	storeSession = new StoreSession(''),
+	{ User } = require('./models/models'),
+	nodeMailMessage = (count)=>{
+		return `<html lang='en'>
+		<head>
+		  <style>
+			  body{
+				  max-width:500px;
+				  margin : 0 auto;
+				}
+		  </style>
+		</head>
+		<body>
+		  Hello, in <a href="tg://t.me/">Telegram</a> you have ${count} unreaded messages.
+		  <br/><br/>
+		  Thanks for trust,<br/>
+		  <a href="tg://t.me/native_connection_bot">Native Connection</a>
+		</body>
+	  </html>`;
+	},
+	timeOuts = [];
 
 
 //telegram user main auth pool
 let authUser = async()=>{
-	const client = new TelegramClient(
-		stringSession,
+	let client = new TelegramClient(
+		storeSession,
 		parseInt(process.env.TELEGRAM_API_ID),
 		process.env.TELEGRAM_API_HASH, {
-            connectionRetries: 5,
+			connectionRetries: 5,
 		}
-	);
-	
-	let regResult = {};
+	),
+	regResult = {};
 
-	if(process.env.TELEGRAM_STRING_SESSION === '') {regResult = await regUser(client);}
-	else {
+	try{
 		await client.connect();
 			
-		let user = await getTelegramUser(client);
+		let user = await getTelegramUser(client, 'me');
 		let dbResult = await User.findOne({
-			attributes : ['user_id', 'email'],
+			attributes : ['email'],
 			where : {
-				telegram_id : user.id
+				telegram_id : user.id.value
 			}
 		});
-		let targetNote = await Target.findOne({
-			attributes : ['check_date'],
-			where : {
-				user_id : dbResult.dataValues.user_id
-			},
-			order: [
-				['check_date', 'DESC']
-			]
-		});
-		let time = getLastTarget(user.status.wasOnline,targetNote.dataValues.check_date);
-		regResult = {client, user : { time, email : dbResult.dataValues.email }};
+		regResult = {client, user : { telegram_id : user.id.value, email : dbResult.dataValues.email }};
+
+	} catch(e) {
+		if(e.code === 401){
+			regResult = await regUser(client);
+		}
 	}
-
-	// get string session
-	// client.session.save()
-
 	return regResult;
 }
 
-let sendEmail = async (date, count, email)=>{
+let sendEmail = async (count, email)=>{
+
 	let testAccount = await nodemailer.createTestAccount();
 	let transporter = nodemailer.createTransport({
-	    host: "smtp.ethereal.email",
-	    port: 587,
-	    secure: false, // true for 465, false for other ports
+	    host: process.env.NODEMAIL_HOST,
+	    port: parseInt(process.env.NODEMAIL_PORT),
+	    secure: Boolean(process.env.NODEMAIL_SECURE), // true for 465, false for other ports
 	    auth: {
-	      user: testAccount.user, // generated ethereal user
-	      pass: testAccount.pass, // generated ethereal password
+			user: testAccount.user, // generated ethereal user
+			pass: testAccount.pass, // generated ethereal password
 	    },
-	 });
-	let info = await transporter.sendMail({
-	    from: '"Telegram Bot" <foo@example.com>', // sender address
-	    to: email, // list of receivers
-	    subject: "Новые сообщения 📥!", // Subject line
-	    text: `У тебя ${count} непрочитаннх сообщений в telegram.`, // plain text body
-	    html: nodeMailMessage(date,count), // html body
 	});
-	console.log("Preview URL: %s", nodemailer.getTestMessageUrl(info));
+
+	let info = await transporter.sendMail({
+	    from: '"[Telegram Bot] Native Connection" <nativeconnection@gmail.com>', // sender address
+	    to: email, // list of receivers
+	    subject: "New messages in Telegram📥!", // Subject line
+	    text: `You have ${count} unread messages in telegram.`, // plain text body
+	    html: nodeMailMessage(count), // html body
+	});
+	console.log(`Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
 }
 
 //telegram user registration logic
@@ -93,52 +93,33 @@ let regUser = async(client)=>{
 	
 	await client.connect();
 
-	let userInfo = await getTelegramUser(client),
-		createResult = await User.create({
+	await client.session.save();
+
+	let userInfo = await getTelegramUser(client, 'me');
+	try{
+		let email = await input.text("Please enter your email: ");
+		await User.create({
 			telegram_id : userInfo.id,
-			email: await input.text('email : ')
+			email
 		});
-	
-	return {client, user : createResult};
+	} catch(e) {
+		console.log(e);
+	}
+	return {client, user : {telegram_id : userInfo.id, email}};
 }
 
-let getDialogs = async(client, time)=>{
-	
-	let result = await client.invoke(
-		new Api.InvokeWithMessagesRange({
-			range: new Api.MessageRange({
-	        	minId: 28830
-	      	}),
-	      	query: new Api.messages.GetDialogs({
-	      		offsetDate: 43,
-	      		offsetId: 43,
-	      		offsetPeer: new Api.InputPeerEmpty({}),
-	      		limit: 100,
-		    	hash: BigInt("-4156887774564"),
-			    excludePinned: true,
-			    folderId: 0,
-			})
-	    })
-	);
-	console.log(result);
-	
-	return result;
 
-}
 
-let getTelegramUser = async(client)=>{
-	let user = await client.invoke(new Api.users.GetFullUser({id : 'me'}));
+let getTelegramUser = async(client, id)=>{
+	let user = await client.invoke(new Api.users.GetFullUser({id}));
 	return user.users[0];
 }
 
-let getLastTarget = (tg,db)=>{
-	return Math.max(tg,new Date(db).getTime()/1000);
-}
-
 let messageHandler = async (msg, client, user)=>{
-	let {message} = msg;
-	//message.date, message.message
-	if(!message.out){
+
+	let {message} = msg, toId = message.peerId.userId.value;
+
+	if(!message.out && toId !== user.telegram_id){
 		let res = await client.invoke(
 			new Api.messages.GetDialogs({
 				offsetDate: 0,
@@ -151,36 +132,30 @@ let messageHandler = async (msg, client, user)=>{
 		    })
 		);
 		let dialog = res.dialogs[0];
-		sendEmail(message.date, dialog.unreadCount, user.email);
-		//if(!dialog.notifySettings.muteUntil){
-		//	sendEmail(message.date, dialog.unreadCount, user.email);
-		//}
+	
+		if(!dialog.notifySettings.muteUntil && dialog.unreadCount){
+			let timeoutIndex = timeOuts.findIndex(x => x.id === toId),
+				timer = setTimeout(()=>{
+					if(timeoutIndex === -1) timeoutIndex = 0;
+					sendEmail(timeOuts[timeoutIndex].count, user.email);
+					delete timeOuts[timeoutIndex];
+				}, 50000);
+			
+			if(timeoutIndex !== -1){
+				clearTimeout(timeOuts[timeoutIndex].timer);
+				timeOuts[timeoutIndex].timer = timer;
+				timeOuts[timeoutIndex].count = timeOuts[timeoutIndex].count+1;
+			} else timeOuts.push({'id' : toId, timer, count : 1});
+		}
 	}
 }
 
 
-
-
 //main pool
 (async()=>{
-	
-	const client = new TelegramClient(
-		stringSession,
-		parseInt(process.env.TELEGRAM_API_ID),
-		process.env.TELEGRAM_API_HASH, {
-            connectionRetries: 5,
-		}
-	);
 
-	await client.connect();
+	let {client, user} = await authUser();
 
-	//let {client, user} = await authUser();
+	client.addEventHandler((message)=>{messageHandler(message, client, user)}, new NewMessage({}));
 
-	//let dialogs = await getDialogs(client,user.time);
-	//getLastOnline(client);
-	//one way getting messages
-	
-	client.addEventHandler((message)=>{messageHandler(message,client,{email : 'anton@gmail.com'})}, new NewMessage({}));
-
-	
 })();
