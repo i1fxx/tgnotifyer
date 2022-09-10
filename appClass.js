@@ -1,9 +1,9 @@
-let { TelegramClient, Api } = require('telegram'),
-    { StoreSession } = require('telegram/sessions'),
-    { NewMessage } = require('telegram/events'),
-    nodemailer = require('nodemailer'),
-    storeSession = new StoreSession(''),
-    input = require('input');
+let { TelegramClient, Api } = require('telegram');
+let { StoreSession } = require('telegram/sessions');
+let { NewMessage } = require('telegram/events');
+let nodemailer = require('nodemailer');
+let storeSession = new StoreSession('');
+let input = require('input');
 
 module.exports = class Application{
     constructor(config){
@@ -19,29 +19,10 @@ module.exports = class Application{
             }
         );
         this.mocUser = config.user;
-        this.phone=null;
-        this.code=null;
-        this.email=null;
     }
 
     gettimeOuts(){
         return this.timeOuts;
-    }
-
-    setPhoneNumner(number){
-        this.phone = number;
-    }
-
-    setEmail(email){
-        this.email = email;
-    }
-
-    setTgCode(code){
-        this.code = code;
-    }
-
-    getUser(){
-        return this.mocUser;
     }
 
     //telegram user main auth pool
@@ -128,18 +109,14 @@ module.exports = class Application{
             );
             let dialog = res.dialogs[0];
         
-            if(!dialog.notifySettings.muteUntil){//&& dialog.unreadCount
-                /*if(this.timeOuts.length > 0){
-
-                } else {
-                    
-                }*/
-                let timeoutIndex = this.timeOuts.findIndex(x => x.id === fromId),
-                    timer = setTimeout(async ()=>{
-                        if(timeoutIndex === -1) timeoutIndex = 0;
-                        await this.sendEmail(this.timeOuts[timeoutIndex].count, this.mocUser.email);
-                        delete this.timeOuts[timeoutIndex];
-                    }, parseInt(this.timeOut));
+            if(!dialog.notifySettings.muteUntil && dialog.unreadCounts){
+                
+                let timeoutIndex = this.timeOuts.findIndex(x => x && x.id === fromId);
+                let timer = setTimeout(async ()=>{
+                    if(timeoutIndex === -1) timeoutIndex = 0;
+                    await this.sendEmail(this.timeOuts[timeoutIndex].count, this.mocUser.email);
+                    this.timeOuts.splice(timeoutIndex, 1);
+                }, parseInt(this.timeOut));
                 
                 if(timeoutIndex !== -1){
                     clearTimeout(this.timeOuts[timeoutIndex].timer);
@@ -170,14 +147,13 @@ module.exports = class Application{
           </html>`;
         };
         try{
-            console.log(this.mocUser.email);
             let transporter = nodemailer.createTransport({
                 host: this.mail.host,
                 port: parseInt(this.mail.port),
                 secure: parseInt(this.mail.secure), // true for 465, false for other ports
                 auth: {
-                    user: "anton.burskii@gmail.com", // generated ethereal user
-                    pass: "AntonBurskii142303", // generated ethereal password
+                    user: this.mocUser.email, // generated ethereal user
+                    pass: this.mocUser.password, // generated ethereal password
                 }
             });
     
@@ -189,9 +165,11 @@ module.exports = class Application{
                 html: nodeMailMessage(count), // html body
             });
 
-            console.log(info);
+            //do something with info;
+
         } catch(e) {
             console.log(e);
+            //error happens
         }
     }
 }

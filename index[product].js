@@ -16,7 +16,8 @@ let app = new Application(
 		timeout : process.env.SEND_TIMEOUT,
         user : {
             telegram_id : process.env.USER_ID,
-            email : process.env.USER_EMAIL
+            email : process.env.USER_EMAIL,
+			password : process.env.USER_PASSWORD
         }
 	}
 );
